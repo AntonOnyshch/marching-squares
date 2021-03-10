@@ -7,8 +7,8 @@ Simple marching squares algorithm
 ## Tooth picture
 ![Tooth picture](/showcases/showcase-tooth.gif)
 
-## Asteroid field
+## Asteroid picture
 ![Asteroid picture](/showcases/showcase-asteroid.gif)
 
-## Letter field
+## Letter picture
 ![Asteroid picture](/showcases/showcase-letter.gif)
