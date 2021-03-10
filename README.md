@@ -9,3 +9,6 @@ Simple marching squares algorithm
 
 ## Asteroid field
 ![Asteroid picture](/showcases/showcase-asteroid.gif)
+
+## Letter field
+![Asteroid picture](/showcases/showcase-letter.gif)
