@@ -9,23 +9,18 @@ export class MarchingSquares
         height: number, 
         res: number,
         threshold: number,
-        color: string)
+        color: string,)
     {
         ctx.clearRect(0, 0, width, height);
 
         ctx.fillStyle = color;
 
-        const resW = width / res;
-        const resH = height / res;
-        const stride = res * width;
-
+        const rows = Math.round(width / res);
+        const cols = Math.round(height / res);
         let j = 0;
-        for (let i = 0; i < resH - 1; i++) {
-            for (j = 0; j < resW - 1; j++) {
-
-                if(field[i * stride + j * res] > threshold) {
-                    ctx.fillRect(j * res, i * res, 1, 1);
-                }
+        for (let i = 0; i < cols - 1; i++) {
+            for (j = 0; j < rows - 1; j++) {
+                ctx.fillRect(j * res, i * res, field[i * rows + j], field[i * rows + j]);
             }          
         }
     }
@@ -50,25 +45,27 @@ export class MarchingSquares
         const coorsLUT = new Uint32Array(8);
 
         const halfRes = ((res * 0.5) + 0.5) | 0;
-        const resW = width / res;
-        const resH = height / res;
+        const rows = Math.round(width / res);
+        const cols = Math.round(height / res);
         const stride = res * width;
-
         let j = 0;
         let aIndex = 0, dIndex = 0;
-        let a,b,c,d;
-        for (let i = 0; i < resH - 1; i++) {
-            for (j = 0; j < resW - 1; j++) {
-
-                aIndex = i * stride + j * res;
-                dIndex = (i + 1) * stride + j * res;
-                a = threshold - field[aIndex] >>> 31 << 3;
-                b = threshold - field[aIndex + 1] >>> 31 << 2;
-                c = threshold - field[dIndex + 1] >>> 31 << 1;
-                d = threshold - field[dIndex] >>> 31;
+        let y = 0, y1 = 0;
+        let state = 0;
+        for (let i = 0; i < cols - 1; i++) {
+            y = i * rows;
+            y1 = (i + 1) * rows;
+            for (j = 0; j < rows - 1; j++) {
+                //aIndex = y + j;
+                //dIndex = y1 + j;
+                // state = (threshold - field[aIndex] >>> 31 << 3) +
+                //         (threshold - field[aIndex + 1] >>> 31 << 2) +
+                //         (threshold - field[dIndex + 1] >>> 31 << 1) +
+                //         (threshold - field[dIndex] >>> 31);
+                state = field[y + j] * 8 + field[y + j + 1] * 4 + field[y1 + j + 1] * 2 + field[y1 + j];
                 MarchingSquares.drawStrokeCell(
                     ctx, 
-                    a + b + c + d,
+                    state,
                     j * res,
                     i * res,
                     res,
@@ -138,25 +135,29 @@ export class MarchingSquares
         const coorsLUT = new Uint32Array(16);
 
         const halfRes = ((res * 0.5) + 0.5) | 0;
-        const resW = width / res;
-        const resH = height / res;
+        const resW = Math.round(width / res);
+        const resH = Math.round(height / res);
         const stride = res * width;
-
+        let state = 0;
         let j = 0;
         let aIndex = 0, dIndex = 0;
         let a,b,c,d;
+        let y = 0, y1 = 0;
         for (let i = 0; i < resH - 1; i++) {
+            y = i * resW;
+            y1 = (i + 1) * resW;
             for (j = 0; j < resW - 1; j++) {
 
-                aIndex = i * stride + j * res;
-                dIndex = (i + 1) * stride + j * res;
-                a = threshold - field[aIndex] >>> 31 << 3;
-                b = threshold - field[aIndex + 1] >>> 31 << 2;
-                c = threshold - field[dIndex + 1] >>> 31 << 1;
-                d = threshold - field[dIndex] >>> 31;
+                // aIndex = i * resW + j;
+                // dIndex = (i + 1) * resW + j;
+                // a = threshold - field[aIndex] >>> 31 << 3;
+                // b = threshold - field[aIndex + 1] >>> 31 << 2;
+                // c = threshold - field[dIndex + 1] >>> 31 << 1;
+                // d = threshold - field[dIndex] >>> 31;
+                state = field[y + j] * 8 + field[y + j + 1] * 4 + field[y1 + j + 1] * 2 + field[y1 + j];
                 MarchingSquares.drawFilledCell(
                     ctx, 
-                    a + b + c + d,
+                    state,
                     j * res,
                     i * res,
                     res,

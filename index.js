@@ -7,6 +7,7 @@ window.marchinsquares = {
   offCanvasCtx: undefined,
   resolution: 0,
   threshold: 0,
+  comparison: 0,
   colors: Uint32Array,
   linesLUT: Uint32Array,
   trianglesLUT: Uint32Array,
@@ -20,13 +21,17 @@ window.marchinsquares = {
 
     // Set precalculated colors as "abgr".
     // These colors can be used as thresholds. 
-    this.colors = new Uint32Array(3);
+    this.colors = new Uint32Array(5);
     // white smoke color
     this.colors[0] = (255 << 24) + (240 << 16) + (240 << 8) + 240;
     // black color
     this.colors[1] = 255 << 24;
     // pink color
     this.colors[2] = (255 << 24) + (255 << 16) + (0 << 8) + 123;
+    // white smoke 2 color
+    this.colors[3] = (255 << 24) + (249 << 16) + (249 << 8) + 249;
+    // gray color
+    this.colors[4] = (255 << 24) + (127 << 16) + (127 << 8) + 127;
 
     // Precalculated Look Up Table for stroke grid.
     this.linesLUT = MarchingSquares.getLinesLUT();
@@ -92,15 +97,18 @@ window.marchinsquares = {
         }
         // OnScreen Canvas we will be use for drawing our lines, etc.
         this.initOnScreenCanvas(500, 500);
-        
+
         // Fill arbitrary field by random numbers.
         this.field = new Uint32Array((this.onCanvas.width + 1) * (this.onCanvas.height + 1));
-        for (let i = 0; i < this.field.length + 1; i++) {
-          this.field[i] = Math.floor(Math.random() * Math.floor(3));
+        for (let i = 0; i < this.field.length; i++) {
+          this.field[i] = Math.floor(Math.random() * Math.floor(2));
         }
 
         // Set threshold
         this.threshold = 1;
+
+        // Set comparion type to ">"
+        this.comparison = 0;
 
         // Call draw method
         this.draw(this.resolution);
@@ -109,12 +117,18 @@ window.marchinsquares = {
       case 'Tooth_Picture': {
         // OnScreen Canvas we will be use for drawing our image on it, etc.
         this.initOffScreenCanvas(520, 520);
+
         // OnScreen Canvas we will be use for drawing our lines, etc.
         this.initOnScreenCanvas(this.offCanvas.width, this.offCanvas.height);
+
         // Init image element and draw its image on the canvas.
-        this.initImgElement('tooth.jpg', this.offCanvas.width, this.offCanvas.height, ()=>{
+        this.initImgElement('./pictures/tooth.jpg', this.offCanvas.width, this.offCanvas.height, ()=>{
           // Set threshold
           this.threshold = this.colors[0];
+
+          // Set comparion type to ">"
+          this.comparison = 0;
+
           // Call draw method
           this.draw(this.resolution);
         });
@@ -124,11 +138,38 @@ window.marchinsquares = {
         // OnScreen Canvas we will be use for drawing our image on it, etc.
         this.initOffScreenCanvas(680, 431);
         // OnScreen Canvas we will be use for drawing our lines, etc.
-        this.initOnScreenCanvas(680, 431);
+        this.initOnScreenCanvas(this.offCanvas.width, this.offCanvas.height);
         // Init image element and draw its image on the canvas.
-        this.initImgElement('mu69.png', 680, 431, ()=>{
+        this.initImgElement('./pictures/mu69.png', this.offCanvas.width, this.offCanvas.height, ()=>{
           // Set threshold
           this.threshold = this.colors[1];
+          
+          // Set comparion type to ">"
+          this.comparison = 0;
+
+          // Call draw method
+          this.draw(this.resolution);
+        });
+      }
+      break;
+      case 'Letter_Picture': {
+        // OnScreen Canvas we will be use for drawing our image on it, etc.
+        this.initOffScreenCanvas(500, 500);
+
+        // OnScreen Canvas we will be use for drawing our lines, etc.
+        this.initOnScreenCanvas(500, 500);
+
+        // Init image element and draw its image on the canvas.
+        this.initImgElement('./pictures/h.png', 500, 500, ()=>{
+          // Set threshold
+          this.threshold = this.colors[0];
+
+          // Set comparion type to "<"
+          this.comparison = 2;
+
+          // Fill field from picture buffer for using it further
+          this.fill_Field_From_Picture_Array();
+
           // Call draw method
           this.draw(this.resolution);
         });
@@ -141,7 +182,7 @@ window.marchinsquares = {
   draw: function(res) {
     document.getElementById('resValue').textContent = res;
     this.resolution = parseInt(res);
-
+    this.fill_Field_From_Picture_Array();
     if(this.drawingWay === 0) {
       // Call draw method
       MarchingSquares.drawStrokeGrid(
@@ -191,5 +232,45 @@ window.marchinsquares = {
 
     this.drawingWay = index;
     this.draw(document.getElementById('resRange').value);
+  },
+  fill_Field_From_Picture_Array: function() {
+    if(this.activeTab === 'Arbitrary') return;
+    const off_cvs = this.offCanvas;
+    const buffer = this.offCanvasCtx.getImageData(0, 0, off_cvs.width, off_cvs.height).data.buffer;
+    const array = new Uint32Array(buffer);
+    const resl = this.resolution;
+    const rows = Math.round(off_cvs.width / resl);
+    const cols = Math.round(off_cvs.height / resl);
+    const ths = this.threshold;
+    this.field = new Uint32Array(rows * cols);
+    const stride = resl * off_cvs.width;
+    let j = 0;
+    if(this.comparison === 0) {
+      for (let i = 0; i < cols; i++) {
+        for (j = 0; j < rows; j++) {
+          if(array[i * stride + j * resl] > ths) {
+            this.field[i * rows + j] = 1;
+          }
+        }
+      }
+    }
+    else if(this.comparison === 1) {
+      for (let i = 0; i < cols; i++) {
+        for (j = 0; j < rows; j++) {
+          if(array[i * stride + j * resl] === ths) {
+            this.field[i * rows + j] = 1;
+          }
+        }
+      }
+    }
+    else {
+      for (let i = 0; i < cols; i++) {
+        for (j = 0; j < rows; j++) {
+          if(array[i * stride + j * resl] < ths) {
+            this.field[i * rows + j] = 1;
+          }
+        }
+      }
+    }
   }
 }
