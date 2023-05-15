@@ -16,7 +16,7 @@ https://github.com/AntonOnyshch/marching-squares/assets/58116769/6ebe3870-8ba9-4
 
 - Draw arbitrary dots and contour around them
 - Draw lines, triangles. Including filled triangles
-- Use interpolization for smooth lines
+- Use interpolation for smooth lines
 - Ability to tune resolution
 - Several random pictures to see different results
 
