@@ -1,13 +1,12 @@
 {
     "compilerOptions": {
+        "rootDir": "./src",
         "outDir": "./debug/",
+        "strict": true,
         "noImplicitAny": true,
-        "module": "es6",
-        "target": "es6",
-        "allowJs": true,
-        "sourceMap": true
-    },
-    "files":[
-        "src/marching-squares.ts"
-    ]
+        "module": "ESNext",
+        "target": "ESNext",
+        "sourceMap": true,
+        "forceConsistentCasingInFileNames": true
+    }
 }

@@ -1,172 +1,570 @@
 export class MarchingSquares {
-    //#region Dot Grid
-    static drawDotGrid(field, ctx, width, height, res, threshold, color) {
-        ctx.clearRect(0, 0, width, height);
-        ctx.fillStyle = color;
-        const rows = Math.round(width / res);
-        const cols = Math.round(height / res);
+    _shapeDrawer;
+    _resolution = 6;
+    _half_resolution = 3;
+    _columns = 0;
+    _rows = 0;
+    _color = 'black';
+    _isoValue = 0;
+    _interpolate = false;
+    _isoContourLUT = new Uint8Array();
+    _scalarGrid = new Uint32Array();
+    get resolution() {
+        return this._resolution;
+    }
+    set resolution(value) {
+        this._resolution = value;
+        this._half_resolution = Math.round(this._resolution / 2);
+        this._rows = Math.round(this._shapeDrawer.height / this._resolution);
+        this._columns = Math.round(this._shapeDrawer.width / this._resolution);
+    }
+    set color(value) {
+        this._color = value;
+    }
+    set isoValue(value) {
+        this._isoValue = value;
+    }
+    get useInterpolation() {
+        return this._interpolate;
+    }
+    set useInterpolation(value) {
+        this._interpolate = value;
+    }
+    set isoContourLUT(value) {
+        this._isoContourLUT = value;
+    }
+    set scalarGrid(value) {
+        this._scalarGrid = value;
+    }
+    constructor(shapeDrawer) {
+        this._shapeDrawer = shapeDrawer;
+    }
+    drawDots() {
+        this._shapeDrawer.clear();
+        this._shapeDrawer.fillStyle = this._color;
+        let x = 0, y = 0;
+        let stride = 0;
         let j = 0;
-        for (let i = 0; i < cols - 1; i++) {
-            for (j = 0; j < rows - 1; j++) {
-                ctx.fillRect(j * res, i * res, field[i * rows + j], field[i * rows + j]);
+        let size = 0;
+        for (let i = 0; i < this._rows; i++) {
+            stride = i * this._resolution * this._shapeDrawer.width;
+            y = i * this._resolution;
+            for (j = 0; j < this._columns; j++) {
+                x = j * this._resolution;
+                size = this._isoContourLUT[(this._scalarGrid[stride + x] << 24) >>> 24];
+                this._shapeDrawer.drawDot(x, y, size);
             }
         }
     }
-    //#endregion
-    //#region Stroke Grid
-    static drawStrokeGrid(field, ctx, width, height, res, threshold, color, linesLUT) {
-        ctx.clearRect(0, 0, width, height);
-        ctx.fillStyle = "rgb(0, 0, 0, 0)";
-        ctx.strokeStyle = color;
-        const coorsLUT = new Uint32Array(8);
-        const halfRes = ((res * 0.5) + 0.5) | 0;
-        const rows = Math.round(width / res);
-        const cols = Math.round(height / res);
-        const stride = res * width;
-        let j = 0;
-        let aIndex = 0, dIndex = 0;
-        let y = 0, y1 = 0;
-        let state = 0;
-        for (let i = 0; i < cols - 1; i++) {
-            y = i * rows;
-            y1 = (i + 1) * rows;
-            for (j = 0; j < rows - 1; j++) {
-                //aIndex = y + j;
-                //dIndex = y1 + j;
-                // state = (threshold - field[aIndex] >>> 31 << 3) +
-                //         (threshold - field[aIndex + 1] >>> 31 << 2) +
-                //         (threshold - field[dIndex + 1] >>> 31 << 1) +
-                //         (threshold - field[dIndex] >>> 31);
-                state = field[y + j] * 8 + field[y + j + 1] * 4 + field[y1 + j + 1] * 2 + field[y1 + j];
-                MarchingSquares.drawStrokeCell(ctx, state, j * res, i * res, res, halfRes, coorsLUT, linesLUT);
-            }
-        }
-    }
-    static drawStrokeCell(ctx, state, x, y, res, halfRes, coorsLUT, linesLUT) {
-        if (state === 0)
-            return;
-        coorsLUT[0] = x + halfRes;
-        coorsLUT[1] = y;
-        coorsLUT[2] = x + res;
-        coorsLUT[3] = y + halfRes;
-        coorsLUT[4] = x + halfRes;
-        coorsLUT[5] = y + res;
-        coorsLUT[6] = x;
-        coorsLUT[7] = y + halfRes;
-        if (state === 5 || state === 10) {
-            ctx.beginPath();
-            ctx.moveTo(coorsLUT[linesLUT[state] >> 28], coorsLUT[(linesLUT[state] << 4) >> 28]);
-            ctx.lineTo(coorsLUT[(linesLUT[state] << 8) >> 28], coorsLUT[(linesLUT[state] << 12) >> 28]);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(coorsLUT[(linesLUT[state] << 16) >> 28], coorsLUT[(linesLUT[state] << 20) >> 28]);
-            ctx.lineTo(coorsLUT[(linesLUT[state] << 24) >> 28], coorsLUT[(linesLUT[state] << 28) >> 28]);
-            ctx.stroke();
+    drawLines() {
+        if (this._interpolate) {
+            this.drawLinesInterpolated();
         }
         else {
-            ctx.beginPath();
-            ctx.moveTo(coorsLUT[linesLUT[state] >> 12], coorsLUT[(linesLUT[state] << 20) >> 28]);
-            ctx.lineTo(coorsLUT[(linesLUT[state] << 24) >> 28], coorsLUT[(linesLUT[state] << 28) >> 28]);
-            ctx.stroke();
+            this.drawLinesRough();
         }
     }
-    //#endregion
-    //#region Filled Grid
-    static drawFilledGrid(field, ctx, width, height, res, threshold, color, triangles) {
-        ctx.clearRect(0, 0, width, height);
-        ctx.fillStyle = color;
-        const coorsLUT = new Uint32Array(16);
-        const halfRes = ((res * 0.5) + 0.5) | 0;
-        const resW = Math.round(width / res);
-        const resH = Math.round(height / res);
-        const stride = res * width;
+    drawTriangles() {
+        if (this._interpolate) {
+            this.drawTrianglesInterpolated();
+        }
+        else {
+            this.drawTrianglesRough();
+        }
+    }
+    drawLinesRough() {
+        this._shapeDrawer.clear();
+        this._shapeDrawer.fillStyle = "rgb(0, 0, 0, 0)";
+        this._shapeDrawer.strokeStyle = this._color;
+        let grid_y = 0, grid_y1 = 0;
         let state = 0;
-        let j = 0;
-        let aIndex = 0, dIndex = 0;
-        let a, b, c, d;
-        let y = 0, y1 = 0;
-        for (let i = 0; i < resH - 1; i++) {
-            y = i * resW;
-            y1 = (i + 1) * resW;
-            for (j = 0; j < resW - 1; j++) {
-                // aIndex = i * resW + j;
-                // dIndex = (i + 1) * resW + j;
-                // a = threshold - field[aIndex] >>> 31 << 3;
-                // b = threshold - field[aIndex + 1] >>> 31 << 2;
-                // c = threshold - field[dIndex + 1] >>> 31 << 1;
-                // d = threshold - field[dIndex] >>> 31;
-                state = field[y + j] * 8 + field[y + j + 1] * 4 + field[y1 + j + 1] * 2 + field[y1 + j];
-                MarchingSquares.drawFilledCell(ctx, state, j * res, i * res, res, halfRes, coorsLUT, triangles);
+        let top_left = 0, top_right = 0, bottom_right = 0, bottom_left = 0;
+        for (let i = 0; i < this._shapeDrawer.height - this._resolution; i += this._resolution) {
+            grid_y = i * this._shapeDrawer.width;
+            grid_y1 = (i + this._resolution) * this._shapeDrawer.width;
+            for (let j = 0; j < this._shapeDrawer.width - this._resolution; j += this.resolution) {
+                top_left = ((this._scalarGrid[grid_y + j]) << 24) >>> 24;
+                top_right = ((this._scalarGrid[grid_y + (j + this._resolution)]) << 24) >>> 24;
+                bottom_right = ((this._scalarGrid[grid_y1 + (j + this._resolution)]) << 24) >>> 24;
+                bottom_left = ((this._scalarGrid[grid_y1 + j]) << 24) >>> 24;
+                state = this._isoContourLUT[top_left] * 8
+                    + this._isoContourLUT[top_right] * 4
+                    + this._isoContourLUT[bottom_right] * 2
+                    + this._isoContourLUT[bottom_left];
+                switch (state) {
+                    case 0:
+                    case 15: continue;
+                    case 1:
+                    case 14:
+                        {
+                            this._shapeDrawer.drawLine(j, i + this._half_resolution, j + this._half_resolution, i + this._resolution);
+                        }
+                        break;
+                    case 2:
+                    case 13:
+                        {
+                            this._shapeDrawer.drawLine(j + this._resolution, i + this._half_resolution, j + this._half_resolution, i + this._resolution);
+                        }
+                        break;
+                    case 3:
+                    case 12:
+                        {
+                            this._shapeDrawer.drawLine(j, i + this._half_resolution, j + this._resolution, i + this._half_resolution);
+                        }
+                        break;
+                    case 4:
+                    case 11:
+                        {
+                            this._shapeDrawer.drawLine(j + this._half_resolution, i, j + this._resolution, i + this._half_resolution);
+                        }
+                        break;
+                    case 5:
+                        {
+                            this._shapeDrawer.drawLine(j + this._half_resolution, i, j, i + this._half_resolution);
+                            this._shapeDrawer.drawLine(j + this._resolution, i + this._half_resolution, j + this._half_resolution, i + this._resolution);
+                        }
+                        break;
+                    case 6:
+                    case 9:
+                        {
+                            this._shapeDrawer.drawLine(j + this._half_resolution, i, j + this._half_resolution, i + this._resolution);
+                        }
+                        break;
+                    case 7:
+                    case 8:
+                        {
+                            this._shapeDrawer.drawLine(j + this._half_resolution, i, j, i + this._half_resolution);
+                        }
+                        break;
+                    case 10:
+                        {
+                            this._shapeDrawer.drawLine(j + this._half_resolution, i, j + this._resolution, i + this._half_resolution);
+                            this._shapeDrawer.drawLine(j, i + this._half_resolution, j + this._half_resolution, i + this._resolution);
+                        }
+                        break;
+                    default:
+                        break;
+                }
             }
         }
     }
-    static drawFilledCell(ctx, state, x, y, res, halfRes, coorsLUT, trianglesLUT) {
-        coorsLUT[0] = x;
-        coorsLUT[1] = y;
-        coorsLUT[2] = x + halfRes;
-        coorsLUT[3] = y;
-        coorsLUT[4] = x + res;
-        coorsLUT[5] = y;
-        coorsLUT[6] = x + res;
-        coorsLUT[7] = y + halfRes;
-        coorsLUT[8] = x + res;
-        coorsLUT[9] = y + res;
-        coorsLUT[10] = x + halfRes;
-        coorsLUT[11] = y + res;
-        coorsLUT[12] = x;
-        coorsLUT[13] = y + res;
-        coorsLUT[14] = x;
-        coorsLUT[15] = y + halfRes;
-        const tgls = trianglesLUT[state];
-        let tgl;
-        ctx.beginPath();
-        for (let k = 0; k < tgls.length; k++) {
-            tgl = tgls[k];
-            ctx.moveTo(coorsLUT[tgl[0]], coorsLUT[tgl[1]]);
-            ctx.lineTo(coorsLUT[tgl[2]], coorsLUT[tgl[3]]);
-            ctx.lineTo(coorsLUT[tgl[4]], coorsLUT[tgl[5]]);
+    drawLinesInterpolated() {
+        this._shapeDrawer.clear();
+        this._shapeDrawer.fillStyle = "rgb(0, 0, 0, 0)";
+        this._shapeDrawer.strokeStyle = this._color;
+        let grid_y = 0, grid_y1 = 0;
+        let state = 0;
+        let top_left = 0, top_right = 0, bottom_right = 0, bottom_left = 0;
+        for (let i = 0; i < this._shapeDrawer.height - this._resolution; i += this._resolution) {
+            grid_y = i * this._shapeDrawer.width;
+            grid_y1 = (i + this._resolution) * this._shapeDrawer.width;
+            for (let j = 0; j < this._shapeDrawer.width - this._resolution; j += this.resolution) {
+                top_left = ((this._scalarGrid[grid_y + j]) << 24) >>> 24;
+                top_right = ((this._scalarGrid[grid_y + (j + this._resolution)]) << 24) >>> 24;
+                bottom_right = ((this._scalarGrid[grid_y1 + (j + this._resolution)]) << 24) >>> 24;
+                bottom_left = ((this._scalarGrid[grid_y1 + j]) << 24) >>> 24;
+                state = this._isoContourLUT[top_left] * 8
+                    + this._isoContourLUT[top_right] * 4
+                    + this._isoContourLUT[bottom_right] * 2
+                    + this._isoContourLUT[bottom_left];
+                switch (state) {
+                    case 0:
+                    case 15: continue;
+                    case 1:
+                    case 14:
+                        {
+                            const bottom_x = j + this.interpolate(bottom_left, bottom_right);
+                            const left_y = i + this.interpolate(top_left, bottom_left);
+                            this._shapeDrawer.drawLine(j, left_y, bottom_x, i + this._resolution);
+                        }
+                        break;
+                    case 2:
+                    case 13:
+                        {
+                            const bottom_x = j + this.interpolate(bottom_left, bottom_right);
+                            const right_y = i + this.interpolate(top_right, bottom_right);
+                            this._shapeDrawer.drawLine(j + this._resolution, right_y, bottom_x, i + this._resolution);
+                        }
+                        break;
+                    case 3:
+                    case 12:
+                        {
+                            const left_y = i + this.interpolate(top_left, bottom_left);
+                            const right_y = i + this.interpolate(top_right, bottom_right);
+                            this._shapeDrawer.drawLine(j, left_y, j + this._resolution, right_y);
+                        }
+                        break;
+                    case 4:
+                    case 11:
+                        {
+                            const top_x = j + this.interpolate(top_left, top_right);
+                            const right_y = i + this.interpolate(top_right, bottom_right);
+                            this._shapeDrawer.drawLine(top_x, i, j + this._resolution, right_y);
+                        }
+                        break;
+                    case 5:
+                        {
+                            const top_x = j + this.interpolate(top_left, top_right);
+                            const left_y = i + this.interpolate(top_left, bottom_left);
+                            this._shapeDrawer.drawLine(top_x, i, j, left_y);
+                            const right_y = i + this.interpolate(top_right, bottom_right);
+                            const bottom_x = j + this.interpolate(bottom_left, bottom_right);
+                            this._shapeDrawer.drawLine(j + this._resolution, right_y, bottom_x, i + this._resolution);
+                        }
+                        break;
+                    case 6:
+                    case 9:
+                        {
+                            const top_x = j + this.interpolate(top_left, top_right);
+                            const bottom_x = j + this.interpolate(bottom_left, bottom_right);
+                            this._shapeDrawer.drawLine(top_x, i, bottom_x, i + this._resolution);
+                        }
+                        break;
+                    case 7:
+                    case 8:
+                        {
+                            const top_x = j + this.interpolate(top_left, top_right);
+                            const left_y = i + this.interpolate(top_left, bottom_left);
+                            this._shapeDrawer.drawLine(top_x, i, j, left_y);
+                        }
+                        break;
+                    case 10:
+                        {
+                            const top_x = j + this.interpolate(top_left, top_right);
+                            const right_y = i + this.interpolate(top_right, bottom_right);
+                            this._shapeDrawer.drawLine(top_x, i, j + this._resolution, right_y);
+                            const bottom_x = j + this.interpolate(bottom_left, bottom_right);
+                            const left_y = i + this.interpolate(top_left, bottom_left);
+                            this._shapeDrawer.drawLine(j, left_y, bottom_x, i + this._resolution);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
         }
-        ctx.fill();
     }
-    //#endregion
-    //#region LUT
-    static getLinesLUT() {
-        const linesLUT = new Uint32Array(16);
-        linesLUT[1] = (4 << 12) + (5 << 8) + (6 << 4) + 7;
-        linesLUT[2] = (2 << 12) + (3 << 8) + (4 << 4) + 5;
-        linesLUT[3] = (2 << 12) + (3 << 8) + (6 << 4) + 7;
-        linesLUT[4] = (0 << 12) + (1 << 8) + (2 << 4) + 3;
-        linesLUT[5] = (0 << 28) + (1 << 24) + (6 << 20) + (7 << 16) + (2 << 12) + (3 << 8) + (4 << 4) + 5;
-        linesLUT[6] = (0 << 12) + (1 << 8) + (4 << 4) + 5;
-        linesLUT[7] = (0 << 12) + (1 << 8) + (6 << 4) + 7;
-        linesLUT[8] = (0 << 12) + (1 << 8) + (6 << 4) + 7;
-        linesLUT[9] = (0 << 12) + (1 << 8) + (4 << 4) + 5;
-        linesLUT[10] = (0 << 28) + (1 << 24) + (2 << 20) + (3 << 16) + (4 << 12) + (5 << 8) + (6 << 4) + 7;
-        linesLUT[11] = (0 << 12) + (1 << 8) + (2 << 4) + 3;
-        linesLUT[12] = (2 << 12) + (3 << 8) + (6 << 4) + 7;
-        linesLUT[13] = (2 << 12) + (3 << 8) + (4 << 4) + 5;
-        linesLUT[14] = (4 << 12) + (5 << 8) + (6 << 4) + 7;
-        return linesLUT;
+    drawTrianglesRough() {
+        this._shapeDrawer.clear();
+        this._shapeDrawer.fillStyle = this._color;
+        this._shapeDrawer.strokeStyle = this._color;
+        let grid_y = 0, grid_y1 = 0;
+        let state = 0;
+        for (let i = 0; i < this._shapeDrawer.height - this._resolution; i += this._resolution) {
+            grid_y = i * this._shapeDrawer.width;
+            grid_y1 = (i + this._resolution) * this._shapeDrawer.width;
+            for (let j = 0; j < this._shapeDrawer.width - this._resolution; j += this.resolution) {
+                state = this._isoContourLUT[((this._scalarGrid[grid_y + j]) << 24) >>> 24] * 8
+                    + this._isoContourLUT[((this._scalarGrid[grid_y + (j + this._resolution)]) << 24) >>> 24] * 4
+                    + this._isoContourLUT[((this._scalarGrid[grid_y1 + (j + this._resolution)]) << 24) >>> 24] * 2
+                    + this._isoContourLUT[((this._scalarGrid[grid_y1 + j]) << 24) >>> 24];
+                switch (state) {
+                    case 0: continue;
+                    case 1:
+                        {
+                            this._shapeDrawer.drawTriangle(j + this._half_resolution, i + this._resolution, j, i + this._resolution, j, i + this._half_resolution);
+                        }
+                        break;
+                    case 2:
+                        {
+                            this._shapeDrawer.drawTriangle(j + this._resolution, i + this._half_resolution, j + this._resolution, i + this._resolution, j + this._half_resolution, i + this._resolution);
+                        }
+                        break;
+                    case 3:
+                        {
+                            this._shapeDrawer.drawRect(j, i + this._half_resolution, this._resolution, this._half_resolution);
+                        }
+                        break;
+                    case 4:
+                        {
+                            this._shapeDrawer.drawTriangle(j + this._half_resolution, i, j + this._resolution, i, j + this._resolution, i + this._half_resolution);
+                        }
+                        break;
+                    case 5:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, i + this._half_resolution,
+                                j + this._half_resolution, i,
+                                j + this._resolution, i,
+                                j + this._resolution, i + this._half_resolution,
+                                j + this._half_resolution, i + this._resolution,
+                                j, i + this._resolution,
+                                j, i + this._half_resolution,
+                            ]);
+                        }
+                        break;
+                    case 6:
+                        {
+                            this._shapeDrawer.drawRect(j + this._half_resolution, i, this._half_resolution, this._resolution);
+                        }
+                        break;
+                    case 7:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j + this._half_resolution, i,
+                                j + this._resolution, i,
+                                j + this._resolution, i + this._resolution,
+                                j, i + this._resolution,
+                                j, i + this._half_resolution,
+                                j + this._half_resolution, i,
+                            ]);
+                        }
+                        break;
+                    case 8:
+                        {
+                            this._shapeDrawer.drawTriangle(j, i, j + this._half_resolution, i, j, i + this._half_resolution);
+                        }
+                        break;
+                    case 9:
+                        {
+                            this._shapeDrawer.drawRect(j, i, this._half_resolution, this._resolution);
+                        }
+                        break;
+                    case 10:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, i,
+                                j + this._half_resolution, i,
+                                j + this._resolution, i + this._half_resolution,
+                                j + this._resolution, i + this._resolution,
+                                j + this._half_resolution, i + this._resolution,
+                                j, i + this._half_resolution,
+                                j, i,
+                            ]);
+                        }
+                        break;
+                    case 11:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, i,
+                                j + this._half_resolution, i,
+                                j + this._resolution, i + this._half_resolution,
+                                j + this._resolution, i + this._resolution,
+                                j, i + this._resolution,
+                                j, i,
+                            ]);
+                        }
+                        break;
+                    case 12:
+                        {
+                            this._shapeDrawer.drawRect(j, i, this._resolution, this._half_resolution);
+                        }
+                        break;
+                    case 13:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, i,
+                                j + this._resolution, i,
+                                j + this._resolution, i + this._half_resolution,
+                                j + this._half_resolution, i + this._resolution,
+                                j, i + this._resolution,
+                                j, i,
+                            ]);
+                        }
+                        break;
+                    case 14:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, i,
+                                j + this._resolution, i,
+                                j + this._resolution, i + this._resolution,
+                                j + this._half_resolution, i + this._resolution,
+                                j, i + this._half_resolution,
+                                j, i,
+                            ]);
+                        }
+                        break;
+                    case 15:
+                        {
+                            this._shapeDrawer.drawRect(j, i, this._resolution, this._resolution);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
     }
-    static getTriangleLUT() {
-        const trianglesLUT = new Array(16);
-        trianglesLUT[0] = new Array(0);
-        trianglesLUT[1] = new Array(new Array(10, 11, 12, 13, 14, 15));
-        trianglesLUT[2] = new Array(new Array(6, 7, 8, 9, 10, 11));
-        trianglesLUT[3] = new Array(new Array(6, 7, 8, 9, 12, 13), new Array(6, 7, 12, 13, 14, 15));
-        trianglesLUT[4] = new Array(new Array(2, 3, 4, 5, 6, 7));
-        trianglesLUT[5] = new Array(new Array(2, 3, 4, 5, 6, 7), new Array(2, 3, 6, 7, 10, 11), new Array(2, 3, 10, 11, 12, 13), new Array(2, 3, 12, 13, 14, 15));
-        trianglesLUT[6] = new Array(new Array(2, 3, 4, 5, 8, 9), new Array(2, 3, 8, 9, 10, 11));
-        trianglesLUT[7] = new Array(new Array(2, 3, 4, 5, 8, 9), new Array(2, 3, 8, 9, 12, 13), new Array(2, 3, 12, 13, 14, 15));
-        trianglesLUT[8] = new Array(new Array(0, 1, 2, 3, 14, 15));
-        trianglesLUT[9] = new Array(new Array(0, 1, 2, 3, 10, 11), new Array(0, 1, 10, 11, 12, 13));
-        trianglesLUT[10] = new Array(new Array(0, 1, 2, 3, 6, 7), new Array(0, 1, 6, 7, 8, 9), new Array(0, 1, 8, 9, 10, 11), new Array(0, 1, 10, 11, 14, 15));
-        trianglesLUT[11] = new Array(new Array(0, 1, 2, 3, 6, 7), new Array(0, 1, 6, 7, 8, 9), new Array(0, 1, 8, 9, 12, 13));
-        trianglesLUT[12] = new Array(new Array(0, 1, 4, 5, 6, 7), new Array(0, 1, 6, 7, 14, 15));
-        trianglesLUT[13] = new Array(new Array(0, 1, 4, 5, 6, 7), new Array(0, 1, 6, 7, 10, 11), new Array(0, 1, 10, 11, 12, 13));
-        trianglesLUT[14] = new Array(new Array(0, 1, 4, 5, 8, 9), new Array(0, 1, 8, 9, 10, 11), new Array(0, 1, 10, 11, 14, 15));
-        trianglesLUT[15] = new Array(new Array(0, 1, 4, 5, 8, 9), new Array(0, 1, 8, 9, 12, 13));
-        return trianglesLUT;
+    drawTrianglesInterpolated() {
+        this._shapeDrawer.clear();
+        this._shapeDrawer.fillStyle = this._color;
+        this._shapeDrawer.strokeStyle = this._color;
+        let j = 0;
+        let grid_y = 0, grid_y1 = 0;
+        let state = 0;
+        let top_left = 0, top_right = 0, bottom_right = 0, bottom_left = 0;
+        for (let i = 0; i < this._shapeDrawer.height - this._resolution; i += this._resolution) {
+            grid_y = i * this._shapeDrawer.width;
+            grid_y1 = (i + this._resolution) * this._shapeDrawer.width;
+            for (let j = 0; j < this._shapeDrawer.width - this._resolution; j += this.resolution) {
+                top_left = ((this._scalarGrid[grid_y + j]) << 24) >>> 24;
+                top_right = ((this._scalarGrid[grid_y + (j + this._resolution)]) << 24) >>> 24;
+                bottom_right = ((this._scalarGrid[grid_y1 + (j + this._resolution)]) << 24) >>> 24;
+                bottom_left = ((this._scalarGrid[grid_y1 + j]) << 24) >>> 24;
+                state = this._isoContourLUT[top_left] * 8
+                    + this._isoContourLUT[top_right] * 4
+                    + this._isoContourLUT[bottom_right] * 2
+                    + this._isoContourLUT[bottom_left];
+                const top_x = j + this.interpolate(top_left, top_right);
+                const right_y = i + this.interpolate(top_right, bottom_right);
+                const bottom_x = j + this.interpolate(bottom_left, bottom_right);
+                const left_y = i + this.interpolate(top_left, bottom_left);
+                switch (state) {
+                    case 0: continue;
+                    case 1:
+                        {
+                            this._shapeDrawer.drawTriangle(bottom_x, i + this._resolution, j, i + this._resolution, j, left_y);
+                        }
+                        break;
+                    case 2:
+                        {
+                            this._shapeDrawer.drawTriangle(j + this._resolution, right_y, j + this._resolution, i + this._resolution, bottom_x, i + this._resolution);
+                        }
+                        break;
+                    case 3:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, left_y,
+                                j, right_y,
+                                j + this._resolution, i + this._resolution,
+                                j, i + this._resolution,
+                                j, left_y,
+                            ]);
+                        }
+                        break;
+                    case 4:
+                        {
+                            this._shapeDrawer.drawTriangle(top_x, i, j + this._resolution, i, j + this._resolution, right_y);
+                        }
+                        break;
+                    case 5:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, left_y,
+                                top_x, i,
+                                j + this._resolution, i,
+                                j + this._resolution, right_y,
+                                bottom_x, i + this._resolution,
+                                j, i + this._resolution,
+                                j, left_y,
+                            ]);
+                        }
+                        break;
+                    case 6:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                top_x, i,
+                                j + this._resolution, i,
+                                j + this._resolution, i + this._resolution,
+                                bottom_x, i + this._resolution,
+                                top_x, i,
+                            ]);
+                        }
+                        break;
+                    case 7:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                top_x, i,
+                                j + this._resolution, i,
+                                j + this._resolution, i + this._resolution,
+                                j, i + this._resolution,
+                                j, left_y,
+                                top_x, i,
+                            ]);
+                        }
+                        break;
+                    case 8:
+                        {
+                            this._shapeDrawer.drawTriangle(j, i, top_x, i, j, left_y);
+                        }
+                        break;
+                    case 9:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, i,
+                                top_x, i,
+                                bottom_x, i + this._resolution,
+                                j, i + this._resolution,
+                                j, i,
+                            ]);
+                        }
+                        break;
+                    case 10:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, i,
+                                top_x, i,
+                                j + this._resolution, right_y,
+                                j + this._resolution, i + this._resolution,
+                                bottom_x, i + this._resolution,
+                                j, left_y,
+                                j, i,
+                            ]);
+                        }
+                        break;
+                    case 11:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, i,
+                                top_x, i,
+                                j + this._resolution, right_y,
+                                j + this._resolution, i + this._resolution,
+                                j, i + this._resolution,
+                                j, i,
+                            ]);
+                        }
+                        break;
+                    case 12:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, i,
+                                j + this._resolution, i,
+                                j + this._resolution, right_y,
+                                j, left_y,
+                                j, i,
+                            ]);
+                        }
+                        break;
+                    case 13:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, i,
+                                j + this._resolution, i,
+                                j + this._resolution, right_y,
+                                bottom_x, i + this._resolution,
+                                j, i + this._resolution,
+                                j, i,
+                            ]);
+                        }
+                        break;
+                    case 14:
+                        {
+                            this._shapeDrawer.drawPolyline([
+                                j, i,
+                                j + this._resolution, i,
+                                j + this._resolution, i + this._resolution,
+                                bottom_x, i + this._resolution,
+                                j, left_y,
+                                j, i,
+                            ]);
+                        }
+                        break;
+                    case 15:
+                        {
+                            this._shapeDrawer.drawRect(j, i, this._resolution, this._resolution);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+    interpolate(a, b) {
+        const lerp = Math.round(Math.abs(this._resolution * ((this._isoValue - a) / (a - b))));
+        return Number.isFinite(lerp) ? lerp : this._half_resolution;
+    }
+    getCellValues() {
     }
 }
 //# sourceMappingURL=marching-squares.js.map

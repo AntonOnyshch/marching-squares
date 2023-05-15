@@ -1,83 +1,47 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <style>
-      /* Style the tab */
-      .tab {
-        overflow: hidden;
-        border: 1px solid #ccc;
-        background-color: #f1f1f1;
-        }
-
-        /* Style the buttons that are used to open the tab content */
-        .tab button {
-        background-color: inherit;
-        float: left;
-        border: none;
-        outline: none;
-        cursor: pointer;
-        padding: 14px 16px;
-        transition: 0.3s;
-        }
-
-        /* Change background color of buttons on hover */
-        .tab button:hover {
-        background-color: #ddd;
-        }
-
-        /* Create an active/current tablink class */
-        .tab button.active {
-        background-color: #ccc;
-        }
-
-        /* Style the tab content */
-        .tabcontent {
-        display: none;
-        padding: 6px 12px;
-        /* border: 1px solid #ccc; */
-        border-top: none;
-        }
-      #content {
-        width: fit-content;
-      }
-      canvas {
-        display: block;
-      }
-      #preference-ctn {
-        display: flex;
-        flex-direction: column;
-      }
-    </style>
-    
+    <meta charset="utf-8">
+    <title>Marching squares</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <script type="module" src="./index.js"></script>
+    <link rel="stylesheet" type="text/css" href="index.css">
   </head>
 <body onload="window.marchinsquares.init().openTab('Arbitrary')">
   <section id="content">
     <!-- Tab links -->
     <div class="tab">
-        <button class="tablinks" onclick="window.marchinsquares.openTab('Arbitrary')">Arbitrary field</button>
-        <button class="tablinks" onclick="window.marchinsquares.openTab('Tooth_Picture')">Tooth picture</button>
-        <button class="tablinks" onclick="window.marchinsquares.openTab('Asteroid_Picture')">Asteroid picture</button>
-        <button class="tablinks" onclick="window.marchinsquares.openTab('Letter_Picture')">Letter picture</button>
+        <button type="button" class="tablinks" onclick="window.marchinsquares.openTab('Arbitrary')">Arbitrary field</button>
+        <button type="button" class="tablinks" onclick="window.marchinsquares.openTab('Tooth_Picture')">Tooth picture</button>
+        <button type="button" class="tablinks" onclick="window.marchinsquares.openTab('Asteroid_Picture')">Asteroid picture</button>
+        <button type="button" class="tablinks" onclick="window.marchinsquares.openTab('Letter_Picture')">Letter picture</button>
     </div>
     
     <div id="preference-ctn">
-      <div style="display: flex;">
+      <div id="draw-type-ctn">
         <div>
-          <strong>Draw Stroke Grid</strong>
-          <input class="radioBtn" type="radio" checked="true" oninput="window.marchinsquares.setDrawingWay(0)">
+          <input type="checkbox" id="filled" name="filled" oninput="window.marchinsquares.setFilled()">
+          <label for="filled">Fill contour</label>
         </div>
         <div>
-          <strong>Draw Filled Grid</strong>
-          <input class="radioBtn" type="radio" oninput="window.marchinsquares.setDrawingWay(1)">
+          <input type="checkbox" id="interpolation" name="interpolation" oninput="window.marchinsquares.setInterpolation()">
+          <label for="interpolation">Use interpolation</label>
         </div>
         <div>
-          <strong>Draw Dot Grid</strong>
-          <input class="radioBtn" type="radio" oninput="window.marchinsquares.setDrawingWay(2)">
+          <label for="lines">Draw lines</label>
+          <input id="lines" class="radioBtn" type="radio" checked="true" oninput="window.marchinsquares.setDrawingWay('lines')">
+        </div>
+        <div>
+          <label for="triangles">Draw triangles</label>
+          <input id="triangles" class="radioBtn" type="radio" oninput="window.marchinsquares.setDrawingWay('triangles')">
+        </div>
+        <div>
+          <label for="dots">Draw dots</label>
+          <input id="dots" class="radioBtn" type="radio" oninput="window.marchinsquares.setDrawingWay('dots')">
         </div>
       </div>
       <strong>Resolution:<span id="resValue"></span></strong>
-      <input id="resRange" type="range" title="resolution" min="1" max="30" value="11" oninput="window.marchinsquares.draw(this.value)">
+      <input id="resRange" type="range" title="resolution" min="1" max="30" value="30" oninput="window.marchinsquares.setResolution(this.value)">
     </div>
 
     <!-- Tab content -->
@@ -98,9 +62,9 @@
       <h3>Letter picture</h3>
       <p>Showcase from real picture</p>
     </div>
-  <div style="position: relative;">
-    <canvas style="position: absolute;" id="offscreencanvas"></canvas>
-    <canvas style="position: absolute;" id="onscreencanvas"></canvas>
+  <div id="canvas-ctn">
+    <canvas id="offscreencanvas"></canvas>
+    <canvas id="onscreencanvas"></canvas>
   </div>
 </section>
 </body>
